@@ -34,7 +34,12 @@
 #include "zquadtree.h"
 #include <sstream>
 #include <vector>
+#include <mutex>
 
+typedef struct {
+    int seed;
+    int size;
+} Batch;
 
 class ZRender {
 public:
@@ -83,6 +88,9 @@ private:
         }            
     };
 
+    std::vector<Batch> mBatches;
+    std::mutex mBatchesMutex;
+
     // Data model
     bool checkTuple(const Value &v, const char *noun, unsigned expected);
     int checkInteger(const Value &v, const char *noun);
@@ -92,7 +100,8 @@ private:
 
     // Raytracer entry point
     void traceRay(Sampler &s);
-    static void traceRayBatch(uint32_t seed, uint32_t count, ZRender *inst);
+    static void worker(ZRender* zr);
+    void traceRayBatch(uint32_t seed, uint32_t count);
     uint64_t traceRays();
 
     // Light sampling

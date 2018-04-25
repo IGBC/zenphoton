@@ -28,10 +28,8 @@
 #include <float.h>
 #include <time.h>
 #include <thread>
-#include <vector>
 #include "zrender.h"
 #include "zmaterial.h"
-
 
 ZRender::ZRender(const Value &scene)
     : mScene(scene),
@@ -39,7 +37,9 @@ ZRender::ZRender(const Value &scene)
     mLights(scene["lights"]),
     mObjects(scene["objects"]),
     mMaterials(scene["materials"]),
-    mLightPower(0.0)
+    mLightPower(0.0),
+    mBatches(),
+    mBatchesMutex()
 {
     // Optional iteger values
     mSeed = checkInteger(mScene["seed"], "seed");
@@ -254,6 +254,9 @@ void ZRender::interrupt()
      */
 
     mRayLimit = -1;
+    while(!mBatches.empty()) {
+        mBatches.pop_back();
+    }
 }
 
 uint64_t ZRender::traceRays()
@@ -267,9 +270,12 @@ uint64_t ZRender::traceRays()
     uint32_t seed = mSeed;
     double startTime = (double)time(0);
 
+    int batch = 1000;
+
+    mBatches.reserve(mRayLimit / batch);
+
     while (1) {
         // Minimum frequency for checking stopping conditions
-        int batch = 1000;
 
         if (mRayLimit) {
             // Set batch size according to remaining rays.
@@ -278,32 +284,45 @@ uint64_t ZRender::traceRays()
                 break;
         }
 
+        mBatches.push_back({seed, batch});
+
+        /*
         if (mTimeLimit) {
             // Check time limit
             double now = (double)time(0);
             if (now > startTime + mTimeLimit)
                 break;
         }
+        */
 
-        std::thread *trs[4];
-        for (int i = 0; i<4; i++) {
-            trs[i] = new std::thread(traceRayBatch, seed, batch, this);
-            
-            seed += batch;
-            rayCount += batch;
-            
-        }
+        seed += batch;
+        rayCount += batch;            
+    }
 
-        for (int i = 0; i<4; i++) {
-            std:: thread *t = trs[i];
-            t->join();
-        }
+    std::thread *trs[4];
+    for (int i = 0; i<4; i++) {
+        trs[i] = new std::thread(worker, this);
+    }
+
+    for (int i = 0; i<4; i++) {
+        std:: thread *t = trs[i];
+        t->join();
     }
 
     return rayCount;
 }
 
-void ZRender::traceRayBatch(uint32_t seed, uint32_t count, ZRender *inst)
+void ZRender::worker(ZRender *zr) {
+    while (!zr->mBatches.empty()) {
+        zr->mBatchesMutex.lock();
+        Batch b = zr->mBatches.back();
+        zr->mBatches.pop_back();
+        zr->mBatchesMutex.unlock();
+        zr->traceRayBatch(b.seed, b.size);
+    }
+}
+
+void ZRender::traceRayBatch(uint32_t seed, uint32_t count)
 {
     /*
      * Trace a batch of rays, starting with ray number "start", and
@@ -316,7 +335,7 @@ void ZRender::traceRayBatch(uint32_t seed, uint32_t count, ZRender *inst)
 
     while (count--) {
         Sampler s(seed++);
-        inst->traceRay(s);
+        traceRay(s);
     }
 }
 
