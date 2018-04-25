@@ -299,13 +299,16 @@ uint64_t ZRender::traceRays()
         rayCount += batch;            
     }
 
-    std::thread *trs[4];
-    for (int i = 0; i<4; i++) {
-        trs[i] = new std::thread(worker, this);
+    std::vector<std::thread*> trs;
+    int n = std::thread::hardware_concurrency();
+    for (int i = 0; i < n; i++) {
+        std::thread *t = new std::thread(worker, this);
+        trs.push_back(t);
     }
 
-    for (int i = 0; i<4; i++) {
-        std:: thread *t = trs[i];
+    while (!trs.empty()) {
+        std:: thread *t = trs.back();
+        trs.pop_back();
         t->join();
     }
 
