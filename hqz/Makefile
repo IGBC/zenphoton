@@ -12,7 +12,7 @@ TMP_FILES := examples/benchmark.json examples/benchmark.png
 CDEPS := src/*.h
 
 CCFLAGS := -Isrc
-LIBS := -lstdc++ -lm
+LIBS := -lpthread -lstdc++ -lm
 
 CCFLAGS += -Wall -g
 CCFLAGS += -O3 -march=native -ffast-math -fno-exceptions -fomit-frame-pointer -funroll-loops

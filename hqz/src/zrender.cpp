@@ -27,6 +27,8 @@
 
 #include <float.h>
 #include <time.h>
+#include <thread>
+#include <vector>
 #include "zrender.h"
 #include "zmaterial.h"
 
@@ -283,16 +285,25 @@ uint64_t ZRender::traceRays()
                 break;
         }
 
-        traceRayBatch(seed, batch);
+        std::thread *trs[4];
+        for (int i = 0; i<4; i++) {
+            trs[i] = new std::thread(traceRayBatch, seed, batch, this);
+            
+            seed += batch;
+            rayCount += batch;
+            
+        }
 
-        seed += batch;
-        rayCount += batch;
+        for (int i = 0; i<4; i++) {
+            std:: thread *t = trs[i];
+            t->join();
+        }
     }
 
     return rayCount;
 }
 
-void ZRender::traceRayBatch(uint32_t seed, uint32_t count)
+void ZRender::traceRayBatch(uint32_t seed, uint32_t count, ZRender *inst)
 {
     /*
      * Trace a batch of rays, starting with ray number "start", and
@@ -305,7 +316,7 @@ void ZRender::traceRayBatch(uint32_t seed, uint32_t count)
 
     while (count--) {
         Sampler s(seed++);
-        traceRay(s);
+        inst->traceRay(s);
     }
 }
 

@@ -92,7 +92,7 @@ private:
 
     // Raytracer entry point
     void traceRay(Sampler &s);
-    void traceRayBatch(uint32_t seed, uint32_t count);
+    static void traceRayBatch(uint32_t seed, uint32_t count, ZRender *inst);
     uint64_t traceRays();
 
     // Light sampling
