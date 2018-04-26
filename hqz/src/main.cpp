@@ -34,8 +34,14 @@
 #include <unistd.h>
 #include <cstdio>
 #include <vector>
+#include <thread>
 
 static ZRender *interruptibleRenderer = 0;
+
+typedef struct {
+    std::thread *thread;
+    ZRender *zr;
+} ThreadRuntime;
 
 void handleSigint(int)
 {
@@ -89,30 +95,55 @@ int main(int argc, char **argv)
         return 4;
     }
 
-    ZRender zr(scene);
-    std::vector<unsigned char> pixels;
-    if (zr.hasError()) {
-        fprintf(stderr, "Scene errors:\n%s", zr.errorText());
-        return 5;
+    std::vector<ThreadRuntime> trv;
+    int n = 10; //std::thread::hardware_concurrency();
+    int rays = scene["rays"].GetInt();
+    int seed = scene["seed"].GetInt();
+    int rays_remaining = rays;
+
+    printf("Main: seed: %i, raycount: %d\n", seed, rays);
+    for (int i = 0; i < n; i++) {
+        int r = std::min<int>(rays/n, rays_remaining);
+        ZRender *zr = new ZRender(scene, seed, r);
+        
+        if (zr->hasError()) {
+            fprintf(stderr, "Scene errors:\n%s", zr->errorText());
+            return 5;
+        }
+
+        trv.push_back({ NULL, zr });
+
+        rays_remaining -= r;
+        seed += r;
     }
 
-    // Render, and allow Ctrl-C to interrupt at any time.
-    interruptibleRenderer = &zr;
-    signal(SIGINT, handleSigint);
-    zr.render(pixels);
-    interruptibleRenderer = 0;
-
-    if (zr.hasError()) {
-        fprintf(stderr, "Renderer errors:\n%s", zr.errorText());
-        return 7;
+    for (int i = 0; i < n; i++) {
+        std::thread *t = new std::thread(trv[i].zr->static_render, trv[i].zr);
+        trv[i].thread = t;
     }
 
-    std::vector<unsigned char> png;
-    lodepng::encode(png, pixels, zr.width(), zr.height(), LCT_RGB);
-    if (1 != fwrite(&png[0], png.size(), 1, outputF)) {
-        perror("Error writing output file");
-        return 6;
+    while (!trv.empty()) {
+        std::thread *t = trv.back().thread;
+        t->join();
+        if (trv.back().zr->hasError()) {
+            fprintf(stderr, "Renderer errors:\n%s", trv.back().zr->errorText());
+            return 7;
+        }   
+        trv.pop_back();
     }
+
+    // // Render, and allow Ctrl-C to interrupt at any time.
+    // interruptibleRenderer = &zr;
+    // signal(SIGINT, handleSigint);
+    // zr.render(pixels);
+    // interruptibleRenderer = 0;
+
+    // std::vector<unsigned char> png;
+    // lodepng::encode(png, pixels, zr.width(), zr.height(), LCT_RGB);
+    // if (1 != fwrite(&png[0], png.size(), 1, outputF)) {
+    //     perror("Error writing output file");
+    //     return 6;
+    // }
 
     return 0;
 }

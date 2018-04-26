@@ -20,13 +20,13 @@ lerp = (frame, length, a, b) ->
 
 sunlight = (frame) ->
     # Warm point source
-    x = lerp frame, 600, 1920, -200
-    [ 1.0, x, -20, 0, 0, [0, 180], [5000, 'K'] ]
+    x = lerp frame, 600, 3440, -200
+    [ 1.0, x, -20, 0, 0, [90, 180], [5000, 'K'] ]
 
 sealight = (frame) ->
     # Big diffuse light, with a blueish color
-    x = lerp frame, 600, 1920, -800
-    [ 0.1, [x-300, x+300], 1200, 0, 0, [180, 360], [10000, 'K'] ]
+    x = lerp frame, 600, 3440, -800
+    [ 0.2, [0, 3440], 1500, 0, 0, [235, 315], [10000, 'K'] ]
 
 sineFunc = (frame, seed, x0, y0, w, h, angle) ->
     (t) ->
@@ -47,12 +47,12 @@ fuzzify = (objs) ->
     return objs    
 
 scene = (frame) ->
-    resolution: [1920, 1080]
+    resolution: [3440, 1440]
     rays: RAYS
-    exposure: 0.65
-    gamma: 2.2
+    exposure: 0.60
+    gamma: 1.4
 
-    viewport: [0, 0, 1920, 1080]
+    viewport: [0, 0, 3440, 1440]
     seed: frame * RAYS / 20
 
     lights: [
@@ -61,7 +61,7 @@ scene = (frame) ->
     ]
 
     materials: [
-        [ [0.1, "d"], [0.9, "r"] ]
+        [ [0.0, "d"], [1.0, "r"], [0.0, "t"] ]
     ]
 
     objects: [
@@ -69,7 +69,7 @@ scene = (frame) ->
     ].concat(
         fuzzify plot
             material: 0
-            sineFunc frame, '1', -140, 470, 3000, 900, deg 10 
+            sineFunc frame, '1', -140, 720, 5000, 1200, deg -5 
     )
 
 console.log JSON.stringify scene 0

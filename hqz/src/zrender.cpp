@@ -31,7 +31,9 @@
 #include "zrender.h"
 #include "zmaterial.h"
 
-ZRender::ZRender(const Value &scene)
+#include <stdio.h>
+
+ZRender::ZRender(const Value &scene, int seed, int rays)
     : mScene(scene),
     mViewport(scene["viewport"]),
     mLights(scene["lights"]),
@@ -42,7 +44,7 @@ ZRender::ZRender(const Value &scene)
     mBatchesMutex()
 {
     // Optional iteger values
-    mSeed = checkInteger(mScene["seed"], "seed");
+    mSeed = seed; //checkInteger(mScene["seed"], "seed");
     mDebug = checkInteger(mScene["debug"], "debug");
 
     // Integer resolution values
@@ -53,7 +55,7 @@ ZRender::ZRender(const Value &scene)
     }
 
     // Check stopping conditions
-    mRayLimit = checkNumber(mScene["rays"], "rays");
+    mRayLimit = rays; //checkNumber(mScene["rays"], "rays");
     mTimeLimit = checkNumber(mScene["timelimit"], "timelimit");
     if (mRayLimit <= 0.0 && mTimeLimit <= 0.0) {
         mError << "No stopping conditions set. Expected a ray limit and/or time limit.\n";
@@ -89,6 +91,13 @@ ZRender::ZRender(const Value &scene)
         for (unsigned i = 0; i < mMaterials.Size(); ++i)
             checkMaterialValue(i);
     }
+    printf("seed: %i, raycount: %d\n", mSeed, mRayLimit);
+}
+
+void ZRender::static_render(ZRender *zr)
+{
+    std::vector<unsigned char> pixels;
+    return zr->render(pixels);
 }
 
 void ZRender::render(std::vector<unsigned char> &pixels)
@@ -129,7 +138,7 @@ void ZRender::render(std::vector<unsigned char> &pixels)
     double intensityScale = mLightPower / (255.0 * 8192.0);
     double scale = exp(1.0 + 10.0 * exposure) * areaScale * intensityScale / numRays;
 
-    mImage.render(pixels, scale, 1.0 / gamma);
+    //mImage.render(pixels, scale, 1.0 / gamma);
 }
 
 int ZRender::checkInteger(const Value &v, const char *noun)
@@ -270,12 +279,11 @@ uint64_t ZRender::traceRays()
     uint32_t seed = mSeed;
     double startTime = (double)time(0);
 
-    int batch = 1000;
-
-    mBatches.reserve(mRayLimit / batch);
+    //mBatches.reserve(mRayLimit / batch);
 
     while (1) {
         // Minimum frequency for checking stopping conditions
+        int batch = 1000;
 
         if (mRayLimit) {
             // Set batch size according to remaining rays.
@@ -284,32 +292,17 @@ uint64_t ZRender::traceRays()
                 break;
         }
 
-        mBatches.push_back({seed, batch});
-
-        /*
         if (mTimeLimit) {
             // Check time limit
             double now = (double)time(0);
             if (now > startTime + mTimeLimit)
                 break;
         }
-        */
+
+        traceRayBatch(seed, batch);
 
         seed += batch;
         rayCount += batch;            
-    }
-
-    std::vector<std::thread*> trs;
-    int n = std::thread::hardware_concurrency();
-    for (int i = 0; i < n; i++) {
-        std::thread *t = new std::thread(worker, this);
-        trs.push_back(t);
-    }
-
-    while (!trs.empty()) {
-        std:: thread *t = trs.back();
-        trs.pop_back();
-        t->join();
     }
 
     return rayCount;

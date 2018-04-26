@@ -45,8 +45,9 @@ class ZRender {
 public:
     typedef rapidjson::Value Value;
 
-    ZRender(const Value &scene);
+    ZRender(const Value &scene, int seed, int rays);
 
+    static void static_render(ZRender *zr);
     void render(std::vector<unsigned char> &pixels);
     void interrupt();
 
@@ -70,7 +71,7 @@ private:
     uint32_t mSeed;
     double mLightPower;
     uint32_t mDebug;
-    double mRayLimit;
+    uint32_t mRayLimit;
     double mTimeLimit;
 
     std::ostringstream mError;
