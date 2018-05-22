@@ -26,7 +26,6 @@
  */
 
 #pragma once
-#include "rapidjson/document.h"
 #include "ray.h"
 #include "sampler.h"
 
@@ -41,48 +40,39 @@
  */
 
 struct ZMaterial {
-    typedef rapidjson::Value Value;
+    Sample t, d, r;
 
-    static bool rayOutcome(const Value &object, IntersectionData &d, Sampler &s);
+    static bool rayOutcome(char type, IntersectionData &d, Sampler &s);
 };
 
 
-inline bool ZMaterial::rayOutcome(const Value &object, IntersectionData &d, Sampler &s)
+inline bool ZMaterial::rayOutcome(char type, IntersectionData &d, Sampler &s)
 {
     /*
      * If the ray continues propagating, updates 'd' and returns true.
      * If the ray is absorbed, returns false.
      */
 
-    // Check for 2-tuple outcomes
-    if (object.IsArray() && object.Size() == 2) {
+    switch (type) {
 
-        // Look for 2-tuples with a character parameter
-        const Value &param = object[1];
-        if (param.IsString() && param.GetStringLength() == 1) {
-            switch (param.GetString()[0]) {
+        // Perfectly diffuse, emit the ray with a random angle.
+        case 'd':
+            d.ray.origin = d.point;
+            d.ray.setAngle(s.uniform(0, M_PI * 2.0));
+            return true;
 
-                // Perfectly diffuse, emit the ray with a random angle.
-                case 'd':
-                    d.ray.origin = d.point;
-                    d.ray.setAngle(s.uniform(0, M_PI * 2.0));
-                    return true;
+        // Perfectly transparent, emit the ray with no change in angle.
+        case 't':
+            d.ray.origin = d.point;
+            return true;
 
-                // Perfectly transparent, emit the ray with no change in angle.
-                case 't':
-                    d.ray.origin = d.point;
-                    return true;
+        // Reflected back according to the object's surface normal
+        case 'r':
+            d.ray.origin = d.point;
+            d.ray.reflect(d.normal);
+            return true;
 
-                // Reflected back according to the object's surface normal
-                case 'r':
-                    d.ray.origin = d.point;
-                    d.ray.reflect(d.normal);
-                    return true;
-
-            }
-        }
     }
-
     // Unknown outcome
     return false;
 }

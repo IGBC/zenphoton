@@ -26,7 +26,6 @@
  */
 
 #pragma once
-#include "rapidjson/document.h"
 #include "ray.h"
 #include "sampler.h"
 
@@ -40,12 +39,16 @@
 struct ZObject {
     typedef rapidjson::Value Value;
 
-    static bool rayIntersect(const Value &object, IntersectionData &d, Sampler &s);
-    static void getBounds(const Value &object, AABB &bounds);
+    int material_id;
+    bool curve; // true if a0 and da parameters are valide
+    Sample x0, y0, a0, dx, dy, da; //coordinates
+
+    bool rayIntersect(IntersectionData &d, Sampler &s);
+    void getBounds(AABB &bounds);
 };
 
 
-inline bool ZObject::rayIntersect(const Value &object, IntersectionData &d, Sampler &s)
+inline bool ZObject::rayIntersect(IntersectionData &d, Sampler &s)
 {
     /*
      * Does this ray intersect a specific object? This samples the object once,
@@ -55,86 +58,42 @@ inline bool ZObject::rayIntersect(const Value &object, IntersectionData &d, Samp
      * Does not write to d.object; it is assumed that the caller does this.
      */
 
-    switch (object.Size()) {
+    Vec2 origin = { s.value(x0), s.value(y0) };
+    Vec2 delta  = { s.value(dx), s.value(dy) };
 
-        case 5: {
-            // Line segment
-
-            Vec2 origin = { s.value(object[1]), s.value(object[2]) };
-            Vec2 delta = { s.value(object[3]), s.value(object[4]) };
-
-            if (d.ray.intersectSegment(origin, delta, d.distance)) {
-                d.point = d.ray.pointAtDistance(d.distance);
-                d.normal.x = -delta.y;
-                d.normal.y = delta.x;
-                return true;
-            }
-            break;
+    if (!curve) {
+        // Line segment
+        if (d.ray.intersectSegment(origin, delta, d.distance)) {
+            d.point = d.ray.pointAtDistance(d.distance);
+            d.normal.x = -delta.y;
+            d.normal.y = delta.x;
+            return true;
         }
+    } else {
+        // Line segment with trigonometrically interpolated normals
+        double alpha;
 
-        case 7: {
-            // Line segment with trigonometrically interpolated normals
-
-            Vec2 origin = { s.value(object[1]), s.value(object[2]) };
-            Vec2 delta = { s.value(object[4]), s.value(object[5]) };
-            double alpha;
-
-            if (d.ray.intersectSegment(origin, delta, d.distance, alpha)) {
-                double degrees = s.value(object[3]) + alpha * s.value(object[6]);
-                double radians = degrees * (M_PI / 180.0);
-                d.point = d.ray.pointAtDistance(d.distance);
-                d.normal.x = cos(radians);
-                d.normal.y = sin(radians);
-                return true;
-            }
-            break;
+        if (d.ray.intersectSegment(origin, delta, d.distance, alpha)) {
+            double degrees = s.value(a0) + alpha * s.value(da);
+            double radians = degrees * (M_PI / 180.0);
+            d.point = d.ray.pointAtDistance(d.distance);
+            d.normal.x = cos(radians);
+            d.normal.y = sin(radians);
+            return true;
         }
     }
-
     return false;
 }
 
-inline void ZObject::getBounds(const Value &object, AABB &bounds)
+inline void ZObject::getBounds(AABB &bounds)
 {
-    switch (object.Size()) {
+    Sampler::Bounds sx0 = Sampler::bounds(x0);
+    Sampler::Bounds sy0 = Sampler::bounds(y0);
+    Sampler::Bounds sdx = Sampler::bounds(dx);
+    Sampler::Bounds sdy = Sampler::bounds(dy);
 
-        case 5: {
-            // Line segment
-
-            Sampler::Bounds x0 = Sampler::bounds(object[1]);
-            Sampler::Bounds y0 = Sampler::bounds(object[2]);
-            Sampler::Bounds dx = Sampler::bounds(object[3]);
-            Sampler::Bounds dy = Sampler::bounds(object[4]);
-
-            bounds.left = std::min( x0.min + dx.min, x0.min );
-            bounds.right = std::max( x0.max + dx.max, x0.max );
-            bounds.top = std::min( y0.min + dy.min, y0.min );
-            bounds.bottom = std::max( y0.max + dy.max, y0.max );
-
-            break;
-        }
-
-        case 7: {
-            // Line segment with trigonometrically interpolated normals
-
-            Sampler::Bounds x0 = Sampler::bounds(object[1]);
-            Sampler::Bounds y0 = Sampler::bounds(object[2]);
-            Sampler::Bounds dx = Sampler::bounds(object[4]);
-            Sampler::Bounds dy = Sampler::bounds(object[5]);
-
-            bounds.left = std::min( x0.min + dx.min, x0.min );
-            bounds.right = std::max( x0.max + dx.max, x0.max );
-            bounds.top = std::min( y0.min + dy.min, y0.min );
-            bounds.bottom = std::max( y0.max + dy.max, y0.max );
-
-            break;
-        }
-
-        default: {
-            // Unsupported
-
-            bounds.left = bounds.right = bounds.top = bounds.bottom = 0;
-            break;
-        }
-    }
+    bounds.left = std::min( sx0.min + sdx.min, sx0.min );
+    bounds.right = std::max( sx0.max + sdx.max, sx0.max );
+    bounds.top = std::min( sy0.min + sdy.min, sy0.min );
+    bounds.bottom = std::max( sy0.max + sdy.max, sy0.max );
 }
