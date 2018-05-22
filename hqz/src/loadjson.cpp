@@ -56,6 +56,83 @@ bool checkTuple(const Value &v, const char *noun, unsigned expected)
     return true;
 }
 
+bool checkMaterialID(const Value &v, int numMaterials)
+{
+    // Check for a valid material ID.
+
+    if (!v.IsUint()) {
+        //mError << "Material ID must be an unsigned integer\n";
+        return false;
+    }
+
+    if (v.GetUint() >= numMaterials) {
+        //mError << "Material ID (" << v.GetUint() << ") out of range\n";
+        return false;
+    }
+
+    return true;
+}
+
+bool checkMaterialValue(const Value &v)
+{
+    if (!v.IsArray()) {
+        //mError << "Material #" << index << " is not an array\n";
+        return false;
+    }
+
+    bool result = true;
+    for (unsigned i = 0, e = v.Size(); i != e; ++i) {
+        const Value& outcome = v[i];
+
+        if (!outcome.IsArray() || outcome.Size() < 1 || !outcome[0u].IsNumber()) {
+            //mError << "Material #" << index << " outcome #" << i << "is not an array starting with a number\n";
+            result = false;
+        }
+    }
+
+    return result;
+}
+
+Sample new_sample(const Value &v) {
+    Sample s = {
+        STYPE_CONST,
+        0,
+        0,
+    };
+
+    if (v.IsNumber()) {
+            // Constant
+        s.lower = v.GetDouble();
+        s.type = STYPE_CONST;
+        return s;
+    }
+
+    if (v.IsArray() && v.Size() == 2 && v[0u].IsNumber()) {
+        // 2-tuples starting with a number
+
+        if (v[1].IsNumber()) {
+            double v0 = v[0u].GetDouble();
+            double v1 = v[1].GetDouble();
+            if (v0 > v1) {
+                std::swap(v0, v1);
+            }
+            s.lower = v0;
+            s.upper = v1;
+            s.type = STYPE_LINIER;
+            return s;
+        }
+
+        if (v[1].IsString() && v[1].GetStringLength() == 1 && v[1].GetString()[0] == 'K') {
+            double v0 = v[0u].GetDouble();
+            s.lower = v0;
+            s.type = STYPE_LINIER;
+            return s;
+        }
+    }
+
+    // Unknown
+    return s; //represents null
+}
 
 ZScene parseJson(FILE *scene_f) {
     rapidjson::FileStream istr(scene_f);
@@ -82,4 +159,86 @@ ZScene parseJson(FILE *scene_f) {
     output.seed = checkInteger(scene["seed"], "seed");
     output.rays = checkInteger(scene["rays"], "rays");
     output.timelimit = checkInteger(scene["rays"], "rays");
+
+    // Other cached tuples
+    if (checkTuple(scene["viewport"], "viewport", 4)) {
+        output.viewport.x = new_sample(scene["viewport"][0u]);
+        output.viewport.y = new_sample(scene["viewport"][1]);
+        output.viewport.width = new_sample(scene["viewport"][2]);
+        output.viewport.height = new_sample(scene["viewport"][3]);
+    }
+
+    // Add up the total light power in the scene, and check all lights.
+    double mLightPower = 0.0;
+    const Value &mLights = scene["lights"];
+    if (checkTuple(mLights, "viewport", 1)) {
+        for (unsigned i = 0; i < mLights.Size(); ++i) {
+            const Value &light = mLights[i];
+            if (checkTuple(light, "light", 7)) {
+                ZLight l;
+                l.power = new_sample(light[0u]);
+                l.x = new_sample(light[1]);
+                l.y = new_sample(light[2]);
+                l.pol_angle = new_sample(light[3]);
+                l.pol_distance = new_sample(light[4]);
+                l.ray_angle = new_sample(light[5]);
+                l.wavelength = new_sample(light[6]);
+                // todo add here.
+                mLightPower += light[0u].GetDouble();
+            }
+        }
+    }
+    if (mLightPower <= 0.0) {
+        //mError << "Total light power (" << mLightPower << ") must be positive.\n";
+    }
+
+    // Check all materials
+    const Value &mMaterials = scene["materials"];
+    if (checkTuple(mMaterials, "materials", 0)) {
+        for (unsigned i = 0; i < mMaterials.Size(); ++i) {
+            const Value &mat = mMaterials[i];
+            if (checkMaterialValue(mat)) {
+                ZMaterial m = {0,0,0};
+                for (unsigned j = 0; mat.Size(); ++i) {
+                    char key = mat[j][0u].GetString()[0];
+                    double val = mat[j][1].GetDouble();
+                    switch (key) {
+                        case 'd': m.d = val; break;
+                        case 'r': m.r = val; break;
+                        case 't': m.t = val; break;
+                    }
+                }
+                // Todo add here.
+            }
+        }
+    }
+
+    // Check all objects
+    const Value &mObjects = scene["objects"];
+    if (checkTuple(mObjects, "objects", 0)) {
+        for (unsigned i = 0; i < mObjects.Size(); ++i) {
+            const Value &object = mObjects[i];
+            if (checkTuple(object, "object", 5)) {
+                checkMaterialID(object[0u], mMaterials.Size());
+                ZObject o;
+                o.material_id = object[0u].GetDouble();
+                o.x0 = new_sample(object[1]);
+                o.y0 = new_sample(object[2]);
+                if (object.Size() == 7) {
+                    o.curve = true;
+                    o.a0 = new_sample(object[3]);
+                    o.dx = new_sample(object[4]);
+                    o.dy = new_sample(object[5]);
+                    o.da = new_sample(object[6]);
+                } else {
+                    o.curve = false;
+                    o.dx = new_sample(object[3]);
+                    o.dy = new_sample(object[4]);
+                }
+                // todo add here
+            }
+        }
+    }
+
+    return output;
 }

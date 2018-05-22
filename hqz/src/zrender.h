@@ -44,7 +44,7 @@ typedef struct {
 
 class ZRender {
 public:
-    ZRender(const ZScene &scene, int seed, int rays);
+    ZRender(ZScene scene, int seed, int rays);
 
     static void static_render(ZRender *zr);
     void render(std::vector<unsigned char> &pixels);
@@ -87,13 +87,6 @@ private:
     std::vector<Batch> mBatches;
     std::mutex mBatchesMutex;
 
-    // Data model
-    bool checkTuple(const Value &v, const char *noun, unsigned expected);
-    int checkInteger(const Value &v, const char *noun);
-    double checkNumber(const Value &v, const char *noun);
-    bool checkMaterialID(const Value &v);
-    bool checkMaterialValue(int index);
-
     // Raytracer entry point
     void traceRay(Sampler &s);
     static void worker(ZRender* zr);
@@ -101,8 +94,8 @@ private:
     uint64_t traceRays();
 
     // Light sampling
-    const Value &chooseLight(Sampler &s);
-    bool initRay(Sampler &s, Ray &r, const Value &light);
+    ZLight &chooseLight(Sampler &s);
+    bool initRay(Sampler &s, Ray &r, ZLight &light);
     void initViewport(Sampler &s, ViewportSample &v);
 
     // Material sampling

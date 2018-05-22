@@ -33,7 +33,7 @@
 
 #include <stdio.h>
 
-ZRender::ZRender(const ZScene scene, int seed, int rays)
+ZRender::ZRender(ZScene scene, int seed, int rays)
     : mScene(scene),
     mLightPower(0.0),
     mBatches(),
@@ -53,36 +53,6 @@ ZRender::ZRender(const ZScene scene, int seed, int rays)
         mError << "No stopping conditions set. Expected a ray limit and/or time limit.\n";
     }
 
-    // Other cached tuples
-    checkTuple(mViewport, "viewport", 4);
-
-    // Add up the total light power in the scene, and check all lights.
-    if (checkTuple(mLights, "viewport", 1)) {
-        for (unsigned i = 0; i < mLights.Size(); ++i) {
-            const Value &light = mLights[i];
-            if (checkTuple(light, "light", 7))
-                mLightPower += light[0u].GetDouble();
-        }
-    }
-    if (mLightPower <= 0.0) {
-        mError << "Total light power (" << mLightPower << ") must be positive.\n";
-    }
-
-    // Check all objects
-    if (checkTuple(mObjects, "objects", 0)) {
-        for (unsigned i = 0; i < mObjects.Size(); ++i) {
-            const Value &object = mObjects[i];
-            if (checkTuple(object, "object", 5)) {
-                checkMaterialID(object[0u]);
-            }
-        }
-    }
-
-    // Check all materials
-    if (checkTuple(mMaterials, "materials", 0)) {
-        for (unsigned i = 0; i < mMaterials.Size(); ++i)
-            checkMaterialValue(i);
-    }
     printf("seed: %i, raycount: %d\n", mSeed, mRayLimit);
 }
 
@@ -133,102 +103,13 @@ void ZRender::render(std::vector<unsigned char> &pixels)
     //mImage.render(pixels, scale, 1.0 / gamma);
 }
 
-int ZRender::checkInteger(const Value &v, const char *noun)
-{
-    /*
-     * Convenience method to evaluate an integer. If it's Null, returns zero quietly.
-     * If it's a valid integer, returns it quietly. Otherwise returns zero and logs an error.
-     */
-
-    if (v.IsNull())
-        return 0;
-
-    if (v.IsInt())
-        return v.GetInt();
-
-    mError << "'" << noun << "' expected an integer value\n";
-    return 0;
-}
-
-double ZRender::checkNumber(const Value &v, const char *noun)
-{
-    /*
-     * Convenience method to evaluate a number. If it's Null, returns zero quietly.
-     * If it's a valid number, returns it quietly. Otherwise returns zero and logs an error.
-     */
-
-    if (v.IsNull())
-        return 0;
-
-    if (v.IsNumber())
-        return v.GetDouble();
-
-    mError << "'" << noun << "' expected a number value\n";
-    return 0;
-}
-
-bool ZRender::checkTuple(const Value &v, const char *noun, unsigned expected)
-{
-    /*
-     * A quick way to check for a tuple with an expected length, and set
-     * an error if there's any problem. Returns true on success.
-     */
-
-    if (!v.IsArray() || v.Size() < expected) {
-        mError << "'" << noun << "' expected an array with at least "
-            << expected << " item" << (expected == 1 ? "" : "s") << "\n";
-        return false;
-    }
-
-    return true;
-}
-
-bool ZRender::checkMaterialID(const Value &v)
-{
-    // Check for a valid material ID.
-
-    if (!v.IsUint()) {
-        mError << "Material ID must be an unsigned integer\n";
-        return false;
-    }
-
-    if (v.GetUint() >= mMaterials.Size()) {
-        mError << "Material ID (" << v.GetUint() << ") out of range\n";
-        return false;
-    }
-
-    return true;
-}
-
-bool ZRender::checkMaterialValue(int index)
-{
-    const Value &v = mMaterials[index];
-
-    if (!v.IsArray()) {
-        mError << "Material #" << index << " is not an array\n";
-        return false;
-    }
-
-    bool result = true;
-    for (unsigned i = 0, e = v.Size(); i != e; ++i) {
-        const Value& outcome = v[i];
-
-        if (!outcome.IsArray() || outcome.Size() < 1 || !outcome[0u].IsNumber()) {
-            mError << "Material #" << index << " outcome #" << i << "is not an array starting with a number\n";
-            result = false;
-        }
-    }
-
-    return result;
-}
-
-const ZRender::Value& ZRender::chooseLight(Sampler &s)
+ZLight &ZRender::chooseLight(Sampler &s)
 {
     // Pick a random light, using the light power as a probability weight.
     // Fast path for scenes with only one light.
 
     unsigned i = 0;
-    unsigned last = mLights.Size() - 1;
+    unsigned last = mScene.lights.size() - 1;
 
     if (i != last) {
         double r = s.uniform(0, mLightPower);
@@ -236,15 +117,16 @@ const ZRender::Value& ZRender::chooseLight(Sampler &s)
 
         // Check all lights except the last
         do {
-            const Value& light = mLights[i++];
-            sum += s.value(light[0u]);
+            ZLight light = mScene.lights[i++];
+            sum += s.value(light.power);
             if (r <= sum)
                 return light;
         } while (i != last);
     }
 
     // Default, last light.
-    return mLights[last];
+    ZLight l = mScene.lights[last];
+    return l;
 }
 
 void ZRender::interrupt()
@@ -330,7 +212,7 @@ void ZRender::traceRayBatch(uint32_t seed, uint32_t count)
 void ZRender::traceRay(Sampler &s)
 {
     IntersectionData d;
-    d.object = 0;
+    d.zobject_id = 0;
 
     double w = width();
     double h = height();
@@ -368,16 +250,16 @@ void ZRender::traceRay(Sampler &s)
     }
 }
 
-bool ZRender::initRay(Sampler &s, Ray &r, const Value &light)
+bool ZRender::initRay(Sampler &s, Ray &r, ZLight &light)
 {
-    double cartesianX = s.value(light[1]);
-    double cartesianY = s.value(light[2]);
-    double polarAngle = s.value(light[3]) * (M_PI / 180.0);
-    double polarDistance = s.value(light[4]);
+    double cartesianX = s.value(light.x);
+    double cartesianY = s.value(light.y);
+    double polarAngle = s.value(light.pol_angle) * (M_PI / 180.0);
+    double polarDistance = s.value(light.pol_distance);
     r.origin.x = cartesianX + cos(polarAngle) * polarDistance;
     r.origin.y = cartesianY + sin(polarAngle) * polarDistance;
 
-    double rayAngle = s.value(light[5]) * (M_PI / 180.0);
+    double rayAngle = s.value(light.ray_angle) * (M_PI / 180.0);
     r.setAngle(rayAngle);
 
     /*
@@ -389,7 +271,7 @@ bool ZRender::initRay(Sampler &s, Ray &r, const Value &light)
 
     unsigned tries = 1000;
     for (;;) {
-        double wavelength = s.value(light[6]);
+        double wavelength = s.value(light.wavelength);
         r.color.setWavelength(wavelength);
         if (r.color.isVisible()) {
             // Success
@@ -408,10 +290,10 @@ void ZRender::initViewport(Sampler &s, ViewportSample &v)
 {
     // Sample the viewport. We do this once per ray.
 
-    v.origin.x = s.value(mViewport[0u]);
-    v.origin.y = s.value(mViewport[1]);
-    v.size.x = s.value(mViewport[2]);
-    v.size.y = s.value(mViewport[3]);
+    v.origin.x = s.value(mScene.viewport.x);
+    v.origin.y = s.value(mScene.viewport.y);
+    v.size.x = s.value(mScene.viewport.width);
+    v.size.y = s.value(mScene.viewport.height);
 }
 
 bool ZRender::rayIntersect(IntersectionData &d, Sampler &s, const ViewportSample &v)
@@ -461,20 +343,7 @@ bool ZRender::rayMaterial(IntersectionData &d, Sampler &s)
     ZObject object = mScene.objects[d.zobject_id];
     unsigned id = object.material_id;
     ZMaterial material = mScene.materials[id];
-
-    double r = s.uniform();
-    double sum = 0;
-
-    // Loop over all material outcomes, pick one according to our random variable.
-    for (unsigned i = 0, e = material.Size(); i != e; ++i) {
-        const Value& outcome = material[i];
-        sum += outcome[0u].GetDouble();
-        if (r <= sum)
-            return ZMaterial::rayOutcome(outcome[1].GetString()[0], d, s);
-    }
-
-    // Absorbed
-    return false;
+    return material.rayOutcome(d, s);
 }
 
 void ZRender::renderDebugQuadtree(ZQuadtree::Visitor &v)

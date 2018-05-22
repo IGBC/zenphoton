@@ -40,39 +40,40 @@
  */
 
 struct ZMaterial {
-    Sample t, d, r;
+    double t, d, r;
 
-    static bool rayOutcome(char type, IntersectionData &d, Sampler &s);
+    bool rayOutcome(IntersectionData &id, Sampler &s);
 };
 
 
-inline bool ZMaterial::rayOutcome(char type, IntersectionData &d, Sampler &s)
+inline bool ZMaterial::rayOutcome(IntersectionData &id, Sampler &s)
 {
     /*
      * If the ray continues propagating, updates 'd' and returns true.
      * If the ray is absorbed, returns false.
      */
 
-    switch (type) {
-
-        // Perfectly diffuse, emit the ray with a random angle.
-        case 'd':
-            d.ray.origin = d.point;
-            d.ray.setAngle(s.uniform(0, M_PI * 2.0));
-            return true;
-
-        // Perfectly transparent, emit the ray with no change in angle.
-        case 't':
-            d.ray.origin = d.point;
-            return true;
-
-        // Reflected back according to the object's surface normal
-        case 'r':
-            d.ray.origin = d.point;
-            d.ray.reflect(d.normal);
-            return true;
-
+    double r = s.uniform();
+    double sum = 0;
+    
+    // Loop over all material outcomes, pick one according to our random variable.
+    if (r <= d) {
+        id.ray.origin = id.point;
+        id.ray.setAngle(s.uniform(0, M_PI * 2.0));
+        return true;
     }
+
+    if (r <= d+r) {
+        id.ray.origin = id.point;
+        id.ray.reflect(id.normal);
+        return true;
+    }
+    
+    if (r <= d+r+t) {
+        id.ray.origin = id.point;
+        return true;
+    }
+
     // Unknown outcome
     return false;
 }
