@@ -26,7 +26,6 @@
  */
 
 #pragma once
-#include "rapidjson/document.h"
 #include "ray.h"
 #include "sampler.h"
 #include "zobject.h"
@@ -37,11 +36,10 @@
 
 class ZQuadtree {
 public:
-    typedef rapidjson::Value Value;
     typedef uint32_t Index;
     typedef std::vector<Index> IndexArray;
 
-    void build(const Value &objects);
+    void build(const std::vector<ZObject> &objects);
     bool rayIntersect(IntersectionData &d, Sampler &s);
 
     struct Visitor;
@@ -64,7 +62,7 @@ private:
     };
 
     Node mRoot;
-    const Value *mObjects;
+    const std::vector<ZObject> *mObjects;
 
     bool rayIntersect(IntersectionData &d, Sampler &s, Visitor &v);
     void split(Visitor &v);
@@ -126,15 +124,15 @@ struct ZQuadtree::Visitor
 };
 
 
-inline void ZQuadtree::build(const Value &objects)
+inline void ZQuadtree::build(const std::vector<ZObject> &objects)
 {
     /*
      * Start out with all items in the root node
      */
 
     mObjects = &objects;
-    mRoot.objects.resize(objects.Size());
-    for (unsigned i = 0; i < objects.Size(); ++i)
+    mRoot.objects.resize(objects.size());
+    for (unsigned i = 0; i < objects.size(); ++i)
         mRoot.objects[i] = i;
 
     /*
@@ -171,10 +169,10 @@ inline void ZQuadtree::split(Visitor &v)
 
     for (; in != end; ++in) {
         Index index = node.objects[in];
-        const Value &object = (*mObjects)[index];
+        ZObject object = (*mObjects)[index];
 
         AABB bounds;
-        ZObject::getBounds(object, bounds);
+        object.getBounds(bounds);
 
         if (first.bounds.contains(bounds)) {
             first.current->objects.push_back(index);
@@ -215,10 +213,10 @@ inline double ZQuadtree::splitPosition(Visitor &v)
     for (IndexArray::const_iterator i = node.objects.begin(), e = node.objects.end(); i != e; ++i)
     { 
         Index index = *i;
-        const Value &object = (*mObjects)[index];
+        ZObject object = (*mObjects)[index];
 
         AABB bounds;
-        ZObject::getBounds(object, bounds);
+        object.getBounds(bounds);
 
         denominator += 2;
         if (v.axisY)
@@ -261,9 +259,9 @@ inline bool ZQuadtree::rayIntersect(IntersectionData &d, Sampler &s, Visitor &v)
     for (IndexArray::const_iterator i = node.objects.begin(), e = node.objects.end(); i != e; ++i)
     { 
         Index index = *i;
-        const Value &object = (*mObjects)[index];
+        ZObject object = (*mObjects)[index];
 
-        if (d.object == &object)
+        if (d.zobject_id == object.id)
             continue;
 
         /*
@@ -277,9 +275,9 @@ inline bool ZQuadtree::rayIntersect(IntersectionData &d, Sampler &s, Visitor &v)
         Sampler tempSampler = s;
         tempSampler.mRandom.remix(index);
 
-        if (ZObject::rayIntersect(object, *scratch, tempSampler) && scratch->distance < closest->distance) {
+        if (object.rayIntersect(*scratch, tempSampler) && scratch->distance < closest->distance) {
             std::swap(closest, scratch);
-            closest->object = &object;
+            closest->zobject_id = object.id;
             result = true;
         }
     }

@@ -32,6 +32,7 @@
 #include "ray.h"
 #include "sampler.h"
 #include "zquadtree.h"
+#include "zscene.h"
 #include <sstream>
 #include <vector>
 #include <mutex>
@@ -43,9 +44,7 @@ typedef struct {
 
 class ZRender {
 public:
-    typedef rapidjson::Value Value;
-
-    ZRender(const Value &scene, int seed, int rays);
+    ZRender(const ZScene &scene, int seed, int rays);
 
     static void static_render(ZRender *zr);
     void render(std::vector<unsigned char> &pixels);
@@ -62,11 +61,7 @@ private:
     HistogramImage mImage;
     ZQuadtree mQuadtree;
 
-    const Value& mScene;
-    const Value& mViewport;
-    const Value& mLights;
-    const Value& mObjects;
-    const Value& mMaterials;
+    const ZScene& mScene;
 
     uint32_t mSeed;
     double mLightPower;

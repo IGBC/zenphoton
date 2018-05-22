@@ -33,30 +33,22 @@
 
 #include <stdio.h>
 
-ZRender::ZRender(const Value &scene, int seed, int rays)
+ZRender::ZRender(const ZScene scene, int seed, int rays)
     : mScene(scene),
-    mViewport(scene["viewport"]),
-    mLights(scene["lights"]),
-    mObjects(scene["objects"]),
-    mMaterials(scene["materials"]),
     mLightPower(0.0),
     mBatches(),
     mBatchesMutex()
 {
     // Optional iteger values
     mSeed = seed; //checkInteger(mScene["seed"], "seed");
-    mDebug = checkInteger(mScene["debug"], "debug");
+    mDebug = mScene.debug;
 
     // Integer resolution values
-    const Value& resolution = mScene["resolution"];
-    if (checkTuple(resolution, "resolution", 2)) {
-        mImage.resize(checkInteger(resolution[0u], "resolution[0]"),
-                      checkInteger(resolution[1], "resolution[1]"));
-    }
+    mImage.resize(mScene.r_width, mScene.r_height);
 
     // Check stopping conditions
     mRayLimit = rays; //checkNumber(mScene["rays"], "rays");
-    mTimeLimit = checkNumber(mScene["timelimit"], "timelimit");
+    mTimeLimit = mScene.timelimit;
     if (mRayLimit <= 0.0 && mTimeLimit <= 0.0) {
         mError << "No stopping conditions set. Expected a ray limit and/or time limit.\n";
     }
@@ -102,7 +94,7 @@ void ZRender::static_render(ZRender *zr)
 
 void ZRender::render(std::vector<unsigned char> &pixels)
 {
-    mQuadtree.build(mObjects);
+    mQuadtree.build(mScene.objects);
 
     /*
      * Debug flags
@@ -123,7 +115,7 @@ void ZRender::render(std::vector<unsigned char> &pixels)
      * Optional gamma correction. Defaults to linear, for compatibility with zenphoton.
      */
 
-    double gamma = checkNumber(mScene["gamma"], "gamma");
+    double gamma = mScene.gamma;
     if (gamma <= 0.0)
         gamma = 1.0;
 
@@ -133,7 +125,7 @@ void ZRender::render(std::vector<unsigned char> &pixels)
      * fixed-point resolution we use during histogram rendering.
      */
 
-    double exposure = mScene["exposure"].GetDouble();
+    double exposure = mScene.exposure;
     double areaScale = sqrt(double(width()) * height() / (1024 * 576));
     double intensityScale = mLightPower / (255.0 * 8192.0);
     double scale = exp(1.0 + 10.0 * exposure) * areaScale * intensityScale / numRays;
@@ -466,9 +458,9 @@ bool ZRender::rayMaterial(IntersectionData &d, Sampler &s)
      */
 
     // Lookup in our material database
-    const Value &object = *d.object;
-    unsigned id = object[0u].GetUint();
-    const Value &material = mMaterials[id];
+    ZObject object = mScene.objects[d.zobject_id];
+    unsigned id = object.material_id;
+    ZMaterial material = mScene.materials[id];
 
     double r = s.uniform();
     double sum = 0;
@@ -478,7 +470,7 @@ bool ZRender::rayMaterial(IntersectionData &d, Sampler &s)
         const Value& outcome = material[i];
         sum += outcome[0u].GetDouble();
         if (r <= sum)
-            return ZMaterial::rayOutcome(outcome, d, s);
+            return ZMaterial::rayOutcome(outcome[1].GetString()[0], d, s);
     }
 
     // Absorbed

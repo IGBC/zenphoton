@@ -78,6 +78,7 @@ ZScene parseJson(FILE *scene_f) {
 
     output.exposure = checkNumber(scene["exposure"], "exposure");
     output.gamma = checkNumber(scene["gamma"], "gamma");
+    output.debug = checkInteger(scene["debug"], "debug");
     output.seed = checkInteger(scene["seed"], "seed");
     output.rays = checkInteger(scene["rays"], "rays");
     output.timelimit = checkInteger(scene["rays"], "rays");

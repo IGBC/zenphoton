@@ -36,15 +36,15 @@
  # and how to compute their AABB.
  */
 
-struct ZObject {
-    typedef rapidjson::Value Value;
+class ZObject {
+    public:
+        int id;
+        int material_id;
+        bool curve; // true if a0 and da parameters are valide
+        Sample x0, y0, a0, dx, dy, da; //coordinates
 
-    int material_id;
-    bool curve; // true if a0 and da parameters are valide
-    Sample x0, y0, a0, dx, dy, da; //coordinates
-
-    bool rayIntersect(IntersectionData &d, Sampler &s);
-    void getBounds(AABB &bounds);
+        bool rayIntersect(IntersectionData &d, Sampler &s);
+        void getBounds(AABB &bounds);
 };
 
 

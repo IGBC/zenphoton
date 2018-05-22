@@ -5,4 +5,4 @@ struct ZLight {
     Sample pol_angle, pol_distance;
     Sample ray_angle;
     Sample wavelength;
-}
+};

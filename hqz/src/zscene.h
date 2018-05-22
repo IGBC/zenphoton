@@ -8,6 +8,7 @@ struct ZScene {
     int r_width;
     int r_height;
     int viewport[4];
+    int debug;
     double exposure;
     double gamma;
     int seed;

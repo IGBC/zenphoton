@@ -229,8 +229,7 @@ struct Ray
     }
 };
 
-struct IntersectionData
-{
+struct IntersectionData {
     Ray ray;
 
     Vec2 point;
@@ -238,5 +237,5 @@ struct IntersectionData
     double distance;
 
     // IN: Previous object, to exclude.  OUT: Object we hit.
-    const rapidjson::Value *object;
+    int zobject_id;
 };
