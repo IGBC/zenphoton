@@ -26,12 +26,20 @@
  */
 
 #pragma once
-#include "rapidjson/document.h"
 #include "prng.h"
 #include "spectrum.h"
 #include <cfloat>
 #include <algorithm>
 
+typedef enum {
+    STYPE_CONST, STYPE_LINIER, STYPE_BLACKBODY
+} SampleType;
+
+struct Sample {
+    SampleType type;
+    double lower;
+    double upper;
+};
 
 /*
  * Samplers stochastically sample a JSON value which may be a random
@@ -88,6 +96,18 @@ struct Sampler
      * Returns a sampled value, and updates the sampler state.
      */
 
+    double value(const Sample &v)
+    {
+        switch (v.type) {
+        case STYPE_CONST:
+            return v.lower;
+        case STYPE_LINIER:
+            return uniform(v.lower, v.upper);
+        case STYPE_BLACKBODY:
+            return blackbody(v.lower);
+        }
+    }
+
     double value(const Value &v)
     {
         if (v.IsNumber()) {
@@ -116,6 +136,26 @@ struct Sampler
      * This must be kept in sync with the behavior exposed by value(), in order
      * to calculate bounding boxes for objects.
      */
+
+    static Bounds bounds(const Sample &v)
+    {
+        Bounds result = { FLT_MIN, FLT_MAX };
+
+        switch (v.type) {
+        case STYPE_CONST:
+            result.min = result.max = v.lower;
+            break;
+        case STYPE_LINIER:
+            result.min = v.lower;
+            result.max = v.upper;
+            result.sort();
+            break;
+        default:
+            break;
+        }
+
+        return result;
+    }
 
     static Bounds bounds(const Value &v)
     {
