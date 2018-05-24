@@ -61,7 +61,7 @@ private:
     HistogramImage mImage;
     ZQuadtree mQuadtree;
 
-    const ZScene& mScene;
+    ZScene& mScene;
 
     uint32_t mSeed;
     double mLightPower;

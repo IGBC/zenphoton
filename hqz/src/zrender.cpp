@@ -117,7 +117,7 @@ ZLight &ZRender::chooseLight(Sampler &s)
 
         // Check all lights except the last
         do {
-            ZLight light = mScene.lights[i++];
+            ZLight &light = mScene.lights[i++];
             sum += s.value(light.power);
             if (r <= sum)
                 return light;
@@ -125,7 +125,7 @@ ZLight &ZRender::chooseLight(Sampler &s)
     }
 
     // Default, last light.
-    ZLight l = mScene.lights[last];
+    ZLight &l = mScene.lights[last];
     return l;
 }
 
