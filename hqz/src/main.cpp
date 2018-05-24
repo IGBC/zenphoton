@@ -25,9 +25,7 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include "rapidjson/document.h"
-#include "rapidjson/reader.h"
-#include "rapidjson/filestream.h"
+#include "loadjson.h"
 #include "lodepng.h"
 #include "zrender.h"
 #include <signal.h>
@@ -86,24 +84,17 @@ int main(int argc, char **argv)
         return 3;
     }
 
-    rapidjson::FileStream istr(sceneF);
-    rapidjson::Document scene;
-    scene.ParseStream<0>(istr);
-    if (scene.HasParseError()) {
-        fprintf(stderr, "Parse error at character %ld: %s\n",
-            scene.GetErrorOffset(), scene.GetParseError());
-        return 4;
-    }
-
     std::vector<ThreadRuntime> trv;
     int n = 10; //std::thread::hardware_concurrency();
-    int rays = scene["rays"].GetInt();
-    int seed = scene["seed"].GetInt();
+    ZScene scene = parseJson(sceneF);
+    int rays = scene.rays;
+    int seed = scene.seed;
     int rays_remaining = rays;
 
     printf("Main: seed: %i, raycount: %d\n", seed, rays);
     for (int i = 0; i < n; i++) {
         int r = std::min<int>(rays/n, rays_remaining);
+        //ZScene st = copy_scene(scene);
         ZRender *zr = new ZRender(scene, seed, r);
         
         if (zr->hasError()) {

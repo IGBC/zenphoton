@@ -1,3 +1,4 @@
+#pragma once
 #include <vector>
 
 #include "zobject.h"
@@ -19,4 +20,5 @@ struct ZScene {
     std::vector<ZMaterial> materials;
     std::vector<ZObject> objects;
     std::vector<ZLight> lights;
+    double lightPower;
 };

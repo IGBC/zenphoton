@@ -1,11 +1,13 @@
 BINS := hqz
 
 HQZ_OBJS := \
+	src/loadjson.o \
 	src/zrender.o \
 	src/histogramimage.o \
 	src/spectrum.o \
 	src/main.o \
 	src/lodepng.o
+	
 
 TMP_FILES := examples/benchmark.json examples/benchmark.png
 

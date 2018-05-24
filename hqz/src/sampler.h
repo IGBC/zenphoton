@@ -39,6 +39,14 @@ struct Sample {
     SampleType type;
     double lower;
     double upper;
+
+    Sample copy(){
+        Sample n;
+        n.type = type;
+        n.lower = lower;
+        n.upper = upper;
+        return n;
+    }
 };
 
 /*
@@ -55,8 +63,6 @@ struct Sample {
 struct Sampler
 {
     PRNG mRandom;
-
-    typedef rapidjson::Value Value;
 
     struct Bounds {
         double min;
@@ -108,27 +114,6 @@ struct Sampler
         }
     }
 
-    double value(const Value &v)
-    {
-        if (v.IsNumber()) {
-            // Constant
-            return v.GetDouble();
-        }
-
-        if (v.IsArray() && v.Size() == 2 && v[0u].IsNumber()) {
-            // 2-tuples starting with a number
-
-            if (v[1].IsNumber())
-                return uniform(v[0u].GetDouble(), v[1].GetDouble());
-
-            if (v[1].IsString() && v[1].GetStringLength() == 1 && v[1].GetString()[0] == 'K')
-                return blackbody(v[0u].GetDouble());
-        }
-
-        // Unknown
-        return 0;
-    }
-
     /**
      * Determine the upper and lower bounds of a JSON Value that would
      * be sampled as a random variable. Does not require access to sampler state.
@@ -156,23 +141,4 @@ struct Sampler
 
         return result;
     }
-
-    static Bounds bounds(const Value &v)
-    {
-        Bounds result = { FLT_MIN, FLT_MAX };
-
-        if (v.IsNumber()) {
-            // Constant
-            result.min = result.max = v.GetDouble();
-
-        } else if (v.IsArray() && v.Size() == 2 && v[0u].IsNumber() && v[1].IsNumber()) {
-            // Uniform
-            result.min = v[0u].GetDouble();
-            result.max = v[1].GetDouble();
-            result.sort();
-        }
-
-        return result;
-    }
-
 };

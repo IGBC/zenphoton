@@ -4,7 +4,12 @@
 #include "rapidjson/reader.h"
 #include "rapidjson/filestream.h"
 
+
+#include <sstream>
+
 typedef rapidjson::Value Value;
+
+std::ostringstream mError;
 
 int checkInteger(const Value &v, const char *noun)
 {
@@ -19,7 +24,7 @@ int checkInteger(const Value &v, const char *noun)
     if (v.IsInt())
         return v.GetInt();
 
-    //mError << "'" << noun << "' expected an integer value\n";
+    mError << "'" << noun << "' expected an integer value\n";
     return 0;
 }
 
@@ -36,7 +41,7 @@ double checkNumber(const Value &v, const char *noun)
     if (v.IsNumber())
         return v.GetDouble();
 
-    //mError << "'" << noun << "' expected a number value\n";
+    mError << "'" << noun << "' expected a number value\n";
     return 0;
 }
 
@@ -48,8 +53,8 @@ bool checkTuple(const Value &v, const char *noun, unsigned expected)
      */
 
     if (!v.IsArray() || v.Size() < expected) {
-        //mError << "'" << noun << "' expected an array with at least "
-        //    << expected << " item" << (expected == 1 ? "" : "s") << "\n";
+        mError << "'" << noun << "' expected an array with at least "
+               << expected << " item" << (expected == 1 ? "" : "s") << "\n";
         return false;
     }
 
@@ -61,12 +66,12 @@ bool checkMaterialID(const Value &v, int numMaterials)
     // Check for a valid material ID.
 
     if (!v.IsUint()) {
-        //mError << "Material ID must be an unsigned integer\n";
+        mError << "Material ID must be an unsigned integer\n";
         return false;
     }
 
     if (v.GetUint() >= numMaterials) {
-        //mError << "Material ID (" << v.GetUint() << ") out of range\n";
+        mError << "Material ID (" << v.GetUint() << ") out of range\n";
         return false;
     }
 
@@ -135,6 +140,7 @@ Sample new_sample(const Value &v) {
 }
 
 ZScene parseJson(FILE *scene_f) {
+    fprintf(stderr, "Opening Scene\n");
     rapidjson::FileStream istr(scene_f);
     rapidjson::Document scene;
     scene.ParseStream<0>(istr);
@@ -147,6 +153,7 @@ ZScene parseJson(FILE *scene_f) {
     // Create Output
     ZScene output;
 
+    fprintf(stderr, "Reading Scene Globals\n");
     const Value& resolution = scene["resolution"];    
     if (checkTuple(resolution, "resolution", 2)) {
         output.r_width = checkInteger(resolution[0u], "resolution[0]");
@@ -168,6 +175,7 @@ ZScene parseJson(FILE *scene_f) {
         output.viewport.height = new_sample(scene["viewport"][3]);
     }
 
+    fprintf(stderr, "Adding Lights\n");
     // Add up the total light power in the scene, and check all lights.
     double mLightPower = 0.0;
     const Value &mLights = scene["lights"];
@@ -183,7 +191,7 @@ ZScene parseJson(FILE *scene_f) {
                 l.pol_distance = new_sample(light[4]);
                 l.ray_angle = new_sample(light[5]);
                 l.wavelength = new_sample(light[6]);
-                // todo add here.
+                output.lights.push_back(l);
                 mLightPower += light[0u].GetDouble();
             }
         }
@@ -191,29 +199,37 @@ ZScene parseJson(FILE *scene_f) {
     if (mLightPower <= 0.0) {
         //mError << "Total light power (" << mLightPower << ") must be positive.\n";
     }
+    output.lightPower = mLightPower;
 
     // Check all materials
+    fprintf(stderr, "Computing Materials\n");
     const Value &mMaterials = scene["materials"];
     if (checkTuple(mMaterials, "materials", 0)) {
         for (unsigned i = 0; i < mMaterials.Size(); ++i) {
+            
+            fprintf(stderr, "Material %i\n", i);
             const Value &mat = mMaterials[i];
             if (checkMaterialValue(mat)) {
+                fprintf(stderr, "Material %i Passes\n", i);
                 ZMaterial m = {0,0,0};
-                for (unsigned j = 0; mat.Size(); ++i) {
-                    char key = mat[j][0u].GetString()[0];
-                    double val = mat[j][1].GetDouble();
+                fprintf(stderr, "Material %i has size %i\n", i, mat.Size());
+                for (unsigned j = 0; j < mat.Size(); ++j) {
+                    char key = mat[j][1].GetString()[0];
+                    double val = mat[j][0u].GetDouble();
+                    fprintf(stderr, "Material %i %c %lf\n", i, key, val);
                     switch (key) {
                         case 'd': m.d = val; break;
                         case 'r': m.r = val; break;
                         case 't': m.t = val; break;
                     }
                 }
-                // Todo add here.
+                output.materials.push_back(m);
             }
         }
     }
 
     // Check all objects
+    fprintf(stderr, "Adding Objects\n");
     const Value &mObjects = scene["objects"];
     if (checkTuple(mObjects, "objects", 0)) {
         for (unsigned i = 0; i < mObjects.Size(); ++i) {
@@ -235,10 +251,13 @@ ZScene parseJson(FILE *scene_f) {
                     o.dx = new_sample(object[3]);
                     o.dy = new_sample(object[4]);
                 }
-                // todo add here
+                o.id = i;
+                output.objects.push_back(o);
             }
         }
     }
+
+    fprintf(stderr, "Scene errors:\n%s", mError.str().c_str());
 
     return output;
 }

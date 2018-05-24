@@ -1,3 +1,4 @@
+#pragma once
 #include "sampler.h"
 struct ZLight {
     Sample power;
