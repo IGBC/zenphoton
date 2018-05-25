@@ -100,7 +100,7 @@ void ZRender::render(std::vector<unsigned char> &pixels)
     double intensityScale = mLightPower / (255.0 * 8192.0);
     double scale = exp(1.0 + 10.0 * exposure) * areaScale * intensityScale / numRays;
 
-    //mImage.render(pixels, scale, 1.0 / gamma);
+    mImage.render(pixels, scale, 1.0 / gamma);
 }
 
 ZLight &ZRender::chooseLight(Sampler &s)
